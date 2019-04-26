@@ -1,2 +1,4 @@
 # POMDP
-Implementation of the Kaelbling 1998 and the Hansen 1998
+Implementation of the Kaelbling 1998 : "Planning and acting in partially observable stochastic domains"
+
+Implementation of Hansen 1998 : "Solving POMDPs by Searching in Policy Space"
