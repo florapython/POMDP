@@ -196,23 +196,20 @@ class Tiger:
         for time_step in range(horizon) :
             List_of_policies = []
             if time_step==0:
-                """
-                values_list=[]
-                actions_list = []
                 if self.specF['give_specific_initial_belief'] :
                     initial_belief = self.get_initial_belief_state()
                     value_of_belief =  initial_belief[0]*reward_matrix[:,0]+initial_belief[1]*reward_matrix[:,1]
                     if value_of_belief.shape[0]!=self.specF['action_space'].shape[0] :
                         pdb.set_trace()
                     initial_action = numpy.argmax(value_of_belief)
-                    MyNewPolicy = PolicyTree({'top_node_action':self.specF['action_space'][initial_action],'list_of_observations_and_actions': [self.specF['action_space'][initial_action]], 'value_of_the_policy_tree':reward_matrix[initial_action,:]})
-                    List_of_policies.append(MyNewPolicy)
-                else :
-                """
-                for index, new_action in enumerate(self.specF['action_space']) :
-                    MyNewPolicy = PolicyTree({'top_node_action':new_action,'list_of_observations_and_actions': [new_action], 'value_of_the_policy_tree':reward_matrix[index], 'horizon':time_step},counter)
+                    MyNewPolicy = PolicyTree({'top_node_action':self.specF['action_space'][initial_action],'list_of_observations_and_actions': [self.specF['action_space'][initial_action]], 'value_of_the_policy_tree':reward_matrix[initial_action,:], 'horizon':time_step},counter)
                     counter+=1
                     List_of_policies.append(MyNewPolicy)
+                else :
+                    for index, new_action in enumerate(self.specF['action_space']) :
+                        MyNewPolicy = PolicyTree({'top_node_action':new_action,'list_of_observations_and_actions': [new_action], 'value_of_the_policy_tree':reward_matrix[index], 'horizon':time_step},counter)
+                        counter+=1
+                        List_of_policies.append(MyNewPolicy)
             else :
                 for index_action, new_action in enumerate(self.specF['action_space']) : # action at the top of the new policy tree
                     for index_subpolicy1, subpolicy1 in enumerate(List_of_old_policies) : # subpolicy for observation left
@@ -293,7 +290,7 @@ class Tiger:
                         e1=G.get_edge(Pruned_policies[index].id,Pruned_policies[index].specF['successors'][1].id)
                         e0.attr['label']=Pruned_policies[index].specF['list_of_observations_and_actions'][0][1]
                         e1.attr['label']=Pruned_policies[index].specF['list_of_observations_and_actions'][1][1]
-            if time_step < 5 or time_step > 100 :
+            if time_step <= 5 or time_step > horizon-10:
                 G.draw(self.specF['name_to_save_folder']+'/policy_graph_'+str(time_step)+'.png',prog='dot')
 
             # testing bellman residual
@@ -313,7 +310,7 @@ class Tiger:
             # Policies that will be used for the next time step
             List_of_old_policies = Pruned_policies.copy()
             
-            if time_step < 5 or time_step > 100 :
+            if time_step <= 5 or time_step > horizon-10 :
                 plt.figure()
                 for index in List_index_optimal_policies :
                     plt.plot(self.specF['belief_vector'][0],value_of_belief[:,index],label='policy '+str(index))
@@ -321,7 +318,7 @@ class Tiger:
                 plt.legend()
                 plt.xlabel("belief left")
                 plt.ylabel(str(time_step+1)+" step policy tree value function")
-                plt.savefig(self.specF['name_to_save_folder']+'/fig_'+str(time_step+1)+'step_newmethod.png')
+                plt.savefig(self.specF['name_to_save_folder']+'/fig_'+str(time_step+1)+'step.png')
                 plt.close()
                 plt.figure()
                 plt.plot(self.specF['belief_vector'][0],alpha_max,'k:',label='optimal value')
@@ -334,57 +331,82 @@ class Tiger:
                 numpy.savez_compressed(self.specF['name_to_save_folder']+'/Policies_over_time',Pruned_policies=Pruned_policies)
                 print('THE SOLVER HAS CONVERGED')
                 break
-        plt.figure()
-        plt.plot(List_residual, label="Bellman residual")
-        plt.plot(range(horizon),numpy.ones(horizon)*self.specF['bellman_residual'],color='y',label='to be compared to')
-        plt.xlabel("Time steps")
-        plt.ylabel("Residual")
-        plt.legend()
-        plt.savefig(self.specF['name_to_save_folder']+'/fig_residual.png')
 
+        if self.specF['discounting_parameter'] < 1 :
+            plt.figure()
+            plt.plot(List_residual, label="Bellman residual")
+            plt.plot(range(horizon),numpy.ones(horizon)*self.specF['bellman_residual'],color='y',label='to be compared to')
+            plt.xlabel("Time steps")
+            plt.ylabel("Residual")
+            plt.legend()
+            plt.savefig(self.specF['name_to_save_folder']+'/fig_residual.png')
         return
 
 
-    def plot_plan_graph(self) : # to run only if value iteration has converged
+    def plot_plan_graph(self,initial_belief) : # to run only if value iteration has converged
         Pruned_policies = numpy.load(self.specF['name_to_save_folder']+'/Policies_over_time.npz')['Pruned_policies']
         G=pgv.AGraph(strict=False,directed=True)
         for index in range(len(Pruned_policies)) :
             Pruned_policies[index].set_change_key()
+        name=""
+        if initial_belief :
+            List_nodes_with_initial_belief = []
+            name = "_with_initial_belief"
+            value_initial_belief = self.get_initial_belief_state()
+            for index in range(len(Pruned_policies)) :
+                if value_initial_belief[0] in Pruned_policies[index].specF['optimal_alpha_map'] :
+                    initial_policy=index
+                    List_nodes_with_initial_belief.append(initial_policy)
+                    break
+        Old_list = []
+        while Old_list!=List_nodes_with_initial_belief :
+            Old_list = List_nodes_with_initial_belief.copy()
+            for index_in_the_list in List_nodes_with_initial_belief :
+                for index2 in range(len(Pruned_policies)) :
+                    if Pruned_policies[index2].specF['optimal_alpha_map']==Pruned_policies[index_in_the_list].specF['successors'][0].specF['optimal_alpha_map'] or Pruned_policies[index2].specF['optimal_alpha_map']==Pruned_policies[index_in_the_list].specF['successors'][1].specF['optimal_alpha_map']:
+                        if index2 not in List_nodes_with_initial_belief :
+                            List_nodes_with_initial_belief.append(index2)
+
         for index in range(len(Pruned_policies)) :
-            if Pruned_policies[index].specF['successors'][0].id==Pruned_policies[index].specF['successors'][1].id :
-                for index2 in range(len(Pruned_policies)) :
-                    if Pruned_policies[index2].specF['optimal_alpha_map']==Pruned_policies[index].specF['successors'][0].specF['optimal_alpha_map'] :
-                        G.add_edge(Pruned_policies[index].id,Pruned_policies[index2].id)
-                        n=G.get_node(Pruned_policies[index].id)
-                        n.attr['label'] = Pruned_policies[index].key
-                        nsucc0=G.get_node(Pruned_policies[index2].id)
-                        nsucc0.attr['label'] = Pruned_policies[index2].key  
-                        e=G.get_edge(Pruned_policies[index].id,Pruned_policies[index2].id)
-                        e.attr['label']='TL/TR'
-                        break
+            if initial_belief :
+                if index in List_nodes_with_initial_belief :
+                    G = self.build_nodes_graph(G,Pruned_policies,index)
             else :
-                for index2 in range(len(Pruned_policies)) :
-                    if Pruned_policies[index2].specF['optimal_alpha_map']==Pruned_policies[index].specF['successors'][0].specF['optimal_alpha_map'] :
-                        G.add_edge(Pruned_policies[index].id,Pruned_policies[index2].id)
-                        n=G.get_node(Pruned_policies[index].id)
-                        n.attr['label'] = Pruned_policies[index].key
-                        nsucc0=G.get_node(Pruned_policies[index2].id)
-                        nsucc0.attr['label'] = Pruned_policies[index2].key  
-                        e0=G.get_edge(Pruned_policies[index].id,Pruned_policies[index2].id)
-                        e0.attr['label']=Pruned_policies[index].specF['list_of_observations_and_actions'][0][1]
-                    if Pruned_policies[index2].specF['optimal_alpha_map']==Pruned_policies[index].specF['successors'][1].specF['optimal_alpha_map'] :
-                        G.add_edge(Pruned_policies[index].id,Pruned_policies[index2].id)
-                        n=G.get_node(Pruned_policies[index].id)
-                        n.attr['label'] = Pruned_policies[index].key
-                        nsucc1=G.get_node(Pruned_policies[index2].id)
-                        nsucc1.attr['label'] = Pruned_policies[index2].key 
-                        e1=G.get_edge(Pruned_policies[index].id,Pruned_policies[index2].id)
-                        e1.attr['label']=Pruned_policies[index].specF['list_of_observations_and_actions'][1][1]
-        G.draw(self.specF['name_to_save_folder']+'/plan_graph.png',prog='dot')
+                G = self.build_nodes_graph(G,Pruned_policies,index)
+        G.draw(self.specF['name_to_save_folder']+'/plan_graph'+name+'.png',prog='dot')
         return
 
-    def plot_plan_graph_with_initial_belief(self) : # to run only if value iteration has converged
-        return
+    def build_nodes_graph(self,G,Pruned_policies,index) :
+        if Pruned_policies[index].specF['successors'][0].id==Pruned_policies[index].specF['successors'][1].id :
+            for index2 in range(len(Pruned_policies)) :
+                if Pruned_policies[index2].specF['optimal_alpha_map']==Pruned_policies[index].specF['successors'][0].specF['optimal_alpha_map'] :
+                    G.add_edge(Pruned_policies[index].id,Pruned_policies[index2].id)
+                    n=G.get_node(Pruned_policies[index].id)
+                    n.attr['label'] = Pruned_policies[index].key
+                    nsucc0=G.get_node(Pruned_policies[index2].id)
+                    nsucc0.attr['label'] = Pruned_policies[index2].key  
+                    e=G.get_edge(Pruned_policies[index].id,Pruned_policies[index2].id)
+                    e.attr['label']='TL/TR'
+                    break
+        else :
+            for index2 in range(len(Pruned_policies)) :
+                if Pruned_policies[index2].specF['optimal_alpha_map']==Pruned_policies[index].specF['successors'][0].specF['optimal_alpha_map'] :
+                    G.add_edge(Pruned_policies[index].id,Pruned_policies[index2].id)
+                    n=G.get_node(Pruned_policies[index].id)
+                    n.attr['label'] = Pruned_policies[index].key
+                    nsucc0=G.get_node(Pruned_policies[index2].id)
+                    nsucc0.attr['label'] = Pruned_policies[index2].key  
+                    e0=G.get_edge(Pruned_policies[index].id,Pruned_policies[index2].id)
+                    e0.attr['label']=Pruned_policies[index].specF['list_of_observations_and_actions'][0][1]
+                if Pruned_policies[index2].specF['optimal_alpha_map']==Pruned_policies[index].specF['successors'][1].specF['optimal_alpha_map'] :
+                    G.add_edge(Pruned_policies[index].id,Pruned_policies[index2].id)
+                    n=G.get_node(Pruned_policies[index].id)
+                    n.attr['label'] = Pruned_policies[index].key
+                    nsucc1=G.get_node(Pruned_policies[index2].id)
+                    nsucc1.attr['label'] = Pruned_policies[index2].key 
+                    e1=G.get_edge(Pruned_policies[index].id,Pruned_policies[index2].id)
+                    e1.attr['label']=Pruned_policies[index].specF['list_of_observations_and_actions'][1][1]
+        return G
 
 
 
