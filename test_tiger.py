@@ -6,6 +6,8 @@ import numpy, os
 from Tiger import *
 from Tiger_multiplecoherence import *
 import time
+from Tiger_false import *
+from Tiger_Oct21 import *
 
 # ------------------ KAEBLING 1998 ----------------------------------
 #figure 11 to 13
@@ -59,6 +61,8 @@ MyTiger.compute_PolicyIteration()
 """
 
 # 3) Heuristic search on FSC
-MyTiger = Tiger({'discounting_parameter':0.95, 'name_to_save_folder':'Aug2019_Heuristic_search_tiger'})
+os.system('rm -rf Oct2019_Heuristic_search_tiger/*')
+MyTiger = Tiger({'discounting_parameter':0.95, 'name_to_save_folder':'Oct2019_Heuristic_search_tiger'})
 MyTiger.compute_HeuristicSearch()
+#MyTiger.update_Belief_Heuristic_Search('TR',[1,0],'LEFT')
 

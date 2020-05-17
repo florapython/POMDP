@@ -50,8 +50,10 @@ class Tiger:
         self.specF['give_specific_initial_belief'] = spec.get('give_specific_initial_belief',False)
         self.specF['precision_pointwise_dominance'] = spec.get('precision_pointwise_dominance',0.01)
         self.specF['heuristic_search_error'] = spec.get('heuristic_search_error',0)
-        self.specF['root_node_id'] = spec.get('root_node_id',0)
+        #self.specF['root_node_id'] = spec.get('root_node_id',0)
         self.specF['initial_belief_state'] = spec.get('initial_belief_state',numpy.asarray([0.5,0.5])) # Belief left, belief right
+        self.specF['debug_mode'] = False
+        self.specF['initial_value_upper_bound'] = 100000000*numpy.ones(self.specF['state_space'].shape[0])
 
     def decide_NewTigerLocation(self) :
         p = numpy.random.rand()
@@ -110,8 +112,8 @@ class Tiger:
         else :
             return self.specF['state_space'][numpy.where(self.specF['state_space']!=self.specF['tiger_location'])[0][0]]
 
-
-    def update_Belief(self,observation) : # Paragraph 3.3 of Kaelbling 1998 paper
+    """
+    def update_Belief(self,observation) : # Paragraph 3.3 of Kaelbling 1998 paper WRONG THIS IS VALID ONLY IF ACTION IS LISTEN
         b_R_prior = self.specF['belief_state']
         b_L_prior = 1-self.specF['belief_state']
         if observation == "RIGHT" :
@@ -122,7 +124,7 @@ class Tiger:
             b_R_posterior = (1-self.specF['proba_of_correct_listening'])*self.specF['belief_state']/proba_observation # b_R_posterior+b_L_posterior=1
         self.specF['belief_state']=b_R_posterior
         return 
-
+    """
 
 
 
@@ -520,10 +522,15 @@ class Tiger:
         new_values = reward_matrix[index_action]+self.specF['discounting_parameter']*sum_over_transitions # dim 2*1
         return new_values
 
+    def estimate_value_of_node_during_forwardsearch(self,index_action,node1_value,node2_value,observation_matrix,transition_matrix,reward_matrix) :
+        sum_over_observations = numpy.multiply(observation_matrix[index_action,:,0],node1_value) + numpy.multiply(observation_matrix[index_action,:,1],node2_value)
+        sum_over_transitions = numpy.dot(transition_matrix[index_action,:,:],sum_over_observations) # dim 2*1
+        new_values = reward_matrix[index_action]+self.specF['discounting_parameter']*sum_over_transitions # dim 2*1
+        return new_values
 
 
 
-
+    """
     def compute_PolicyIteration(self) : # Hansen 1998
         step_of_policy_iteration = 0
         transition_matrix = self.get_transition_matrix()
@@ -573,16 +580,7 @@ class Tiger:
                                 new_values  = self.estimate_value_of_node(index_action,node1,node2,observation_matrix,transition_matrix,reward_matrix)
                                 new_node_id = TransientFSC.create_new_node(new_action, numpy.asarray([node1.id, node2.id]), new_values)
                                 number_of_backups+=1
-                            """
-                            else :
-                                print("non optimal sub FSC ?")
-                                pdb.set_trace()
-                            """
-                    """
-                    else :
-                        print("non optimal sub FSC ?")
-                        pdb.set_trace()
-                    """
+
 
             #MaxValue, List_index_optimal_policies, optimal_alpha_map, TransientFSC = self.prune_vectors_from_DP_on_FSC(TransientFSC)
             print("Pruning the transient FSC...")
@@ -700,7 +698,7 @@ class Tiger:
         
         return
 
-
+    """
 
     def compute_max_of_alpha_vectors(self,value_of_belief) :
         alpha_max_fct = numpy.ones(self.specF['belief_vector'].shape[0])*numpy.nan
@@ -731,7 +729,7 @@ class Tiger:
         plt.close()
         return
 
-
+    """
     def compute_ValueIteration(self,horizon) : # Kaelbling 1998
         counter=0 # a running variable used in order to have an id for each PolicyTree objects
         terminate = False # test for terminating the iteration with bellman residual
@@ -798,12 +796,12 @@ class Tiger:
             #alpha_max,List_index_optimal_policies = self.compute_OptimalValue(value_of_belief,List_of_policies)
             alpha_max, List_index_optimal_policies = self.prune_Lark_algorithm(values,List_of_policies)
             print(str(len(List_index_optimal_policies))+" OPTIMAL POLICIES")
-            """
-            alpha_max = numpy.ones(self.specF['belief_vector'].shape[0])*numpy.nan
-            val_belief_optimal_policies = value_of_belief[:,List_index_optimal_policies]
-            for index_belief_val in range(self.specF['belief_vector'].shape[0]) :
-                alpha_max[index_belief_val] = numpy.amax(val_belief_optimal_policies[index_belief_val,:])
-            """
+            
+            #alpha_max = numpy.ones(self.specF['belief_vector'].shape[0])*numpy.nan
+            #val_belief_optimal_policies = value_of_belief[:,List_index_optimal_policies]
+            #for index_belief_val in range(self.specF['belief_vector'].shape[0]) :
+                #alpha_max[index_belief_val] = numpy.amax(val_belief_optimal_policies[index_belief_val,:])
+        
 
             Pruned_policies = [] # it's a list of PolicyTree class instance
             for index, index_pruned_policies in enumerate(List_index_optimal_policies) :
@@ -887,6 +885,8 @@ class Tiger:
         if self.specF['discounting_parameter'] < 1 :
             self.plot_bellman_residual(List_residual)
         return
+
+    """
 
     def plot_bellman_residual(self,List_residual) :
         plt.figure()
@@ -1020,224 +1020,50 @@ class Tiger:
 
 
 
-    def update_Belief_Heuristic_Search(self,observation,belief_vector_left_right) : # Paragraph 3.3 of Kaelbling 1998 paper
-        b_R_prior = belief_vector_left_right
-        b_L_prior = 1-self.specF['belief_state']
-        proba_observation_R = self.specF['proba_of_correct_listening']*belief_vector_left_right[0] + (1-self.specF['proba_of_correct_listening'])*belief_vector_left_right[1]
-        proba_observation_L = self.specF['proba_of_correct_listening']*belief_vector_left_right[1] + (1-self.specF['proba_of_correct_listening'])*belief_vector_left_right[0]
-        if observation == "TR" :
-            b_R_posterior = self.specF['proba_of_correct_listening']*belief_vector_left_right[0]/proba_observation_R
-        elif observation == "TL" :
-            b_R_posterior = (1-self.specF['proba_of_correct_listening'])*belief_vector_left_right[0]/proba_observation_L # b_R_posterior+b_L_posterior=1
-        else : pdb.set_trace()
-        return numpy.asarray([1-b_R_posterior,b_R_posterior]), numpy.asarray([proba_observation_L,proba_observation_R])
-
-
-
-    def compute_HeuristicSearch(): # Hansen 1998
-        step_of_iteration = 0
-        transition_matrix = self.get_transition_matrix()
-        reward_matrix = self.get_reward_matrix()
+    def update_Belief_Heuristic_Search(self,observation,belief_vector_left_right,action_previous_node,second_observation) : # Paragraph 3.3 of Kaelbling 1998 paper
+        index_action_previous_node = numpy.where(action_previous_node==self.specF['action_space'])[0][0]
         observation_matrix = self.get_observation_matrix()
-        terminate = False
-        List_residual = []
-
-        # INITIALISATION : specify an initial FSC, the initial FSC I choose is going to be constituted of the action listen as a node, with connectivity on themselves
-        # Difference with policy iteration, we compute everything only for point-evaluated belief states
-        MyFSC = FiniteStateController({'possible_observations': self.specF['possible_observations'],'state_space':self.specF['state_space'],'heuristic':True})
-        # Policy evaluation of the initial state |S| x |nodes|
-        index_action=2
-        new_action = 'LISTEN'
-        successors=numpy.asarray([0,0])
-        sum_over_observations = numpy.multiply(observation_matrix[index_action,:,0],reward_matrix[index_action,:]) + numpy.multiply(observation_matrix[index_action,:,1],reward_matrix[index_action,:])
-        sum_over_transitions = numpy.dot(transition_matrix[index_action,:,:],sum_over_observations) # dim 2*1
-        new_values = reward_matrix[index_action]+self.specF['discounting_parameter']*sum_over_transitions # dim 2*1
-        new_node_id = MyFSC.create_new_node(new_action, successors, new_values,self.specF['initial_belief_state'])
-
-        MyFSC.plot(self.specF['name_to_save_folder'],step_of_iteration) 
-        MyFSC.update_value_of_states() 
-        recompute_policy_eval = False
-        # Computing value of node 0
-        MyFSC.specF['list_of_nodes'][0].update_lower_bound()    
-        MyFSC.specF['list_of_nodes'][0].specF['reach_proba']=1
-        MyFSC.specF['list_of_nodes'][0].specF['depth']=0
-        MyFSC.specF['list_of_nodes'][0].specF['node_belief'][0]!=0.5 : pdb.set_trace()
-        self.specF['heuristic_search_error'] = MyFSC.specF['list_of_nodes'][0]['upper_bound']-MyFSC.specF['list_of_nodes'][0]['lower_bound']
-        List_residual.append(self.specF['heuristic_search_error'])
-        MyFSC.specF['fringes_of_fsc']=numpy.asarray([0])
-
-
-        while terminate==False :
-
-            print('\n--------- ITERATION STEP ---------'+str(step_of_policy_iteration))
-
-            # POLICY EVALUATION of the FSC
-            if recompute_policy_eval :
-                value_has_converged = numpy.zeros(len(MyFSC.specF['list_of_nodes']),dtype=bool)
-                while numpy.all(value_has_converged)==False: # while the elements of value_has_converged are not all equal to True
-                    for nodes_in_fsc in MyFSC.specF['list_of_nodes'] :
-                        index_node = MyFSC.specF['list_of_nodes'].index(nodes_in_fsc)
-                        if value_has_converged[index_node]==False :
-                            old_value = nodes_in_fsc.specF['value_of_states']
-                            index_action = numpy.where(nodes_in_fsc.specF['action']==self.specF['action_space'])[0][0]
-                            node1 = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(nodes_in_fsc.specF['successors'][0])]
-                            node2 = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(nodes_in_fsc.specF['successors'][1])]
-                            new_values = self.estimate_value_of_node(index_action,node1,node2,observation_matrix,transition_matrix,reward_matrix)
-                            if numpy.sum(numpy.equal(new_values,old_value))!=new_values.shape[0] : # the value changed
-                                value_has_converged[index_node] = False
-                                nodes_in_fsc.specF['value_of_states'] = new_values
-                            else :
-                                value_has_converged[index_node] = True
-
-                MyFSC.update_value_of_states()
-                for nodes_in_fsc in MyFSC.specF['list_of_nodes'] :
-                    nodes_in_fsc.update_lower_bound()
+        transition_matrix = self.get_transition_matrix()
+        if second_observation == False :
+            index_observation_previous_node = numpy.where(observation==self.specF['possible_observations'])[0][0]
+            b_prior = belief_vector_left_right.copy() # |S|
+            b_posterior = numpy.ones(b_prior.shape[0])*numpy.nan
+            for index_s_prime, s_prime in enumerate(self.specF['state_space']) :
+                b_posterior[index_s_prime] = observation_matrix[index_action_previous_node,index_s_prime,index_observation_previous_node]*numpy.sum(numpy.multiply(transition_matrix[index_action_previous_node,:,index_s_prime],b_prior))
+            proba_observation = numpy.sum(numpy.multiply(observation_matrix[index_action_previous_node,:,index_observation_previous_node],b_prior))
+            b_posterior/=numpy.sum(b_posterior)
+            proba_observation2 = None
+        else :
+            index_observation_previous_node = 0
+            index_observation_previous_node2 = 1
+            b_prior = belief_vector_left_right.copy() # |S|
+            b_posterior = numpy.ones(b_prior.shape[0])*numpy.nan
+            b_posterior1 = numpy.ones(b_prior.shape[0])*numpy.nan
+            b_posterior2 = numpy.ones(b_prior.shape[0])*numpy.nan
+            proba_observation = numpy.sum(numpy.multiply(observation_matrix[index_action_previous_node,:,index_observation_previous_node],b_prior))
+            proba_observation2 = numpy.sum(numpy.multiply(observation_matrix[index_action_previous_node,:,index_observation_previous_node2],b_prior))
+            for index_s_prime, s_prime in enumerate(self.specF['state_space']) :
+                b_posterior1[index_s_prime] = observation_matrix[index_action_previous_node,index_s_prime,index_observation_previous_node]*numpy.sum(numpy.multiply(transition_matrix[index_action_previous_node,:,index_s_prime],b_prior))
+                b_posterior2[index_s_prime] = observation_matrix[index_action_previous_node,index_s_prime,index_observation_previous_node2]*numpy.sum(numpy.multiply(transition_matrix[index_action_previous_node,:,index_s_prime],b_prior))
+                b_posterior[index_s_prime] = b_posterior1[index_s_prime]*proba_observation+b_posterior2[index_s_prime]*proba_observation2
+            b_posterior/=numpy.sum(b_posterior)
+            """
+            print("DEBUT PROBA OBSERVATION")
+            print(proba_observation)
+            print(proba_observation2)
+            print("\n")
+            pdb.set_trace()
+            """
 
 
-            # POLICY IMPROVEMENT
-            lower_bound_previous = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(self.specF['root_node_id'])].specF['lower_bound'].copy()
-            # (a) FORWARD SEARCH
-            number_of_forward_search = 0
-            List_new_nodes_from_forward_search_id = []
-            lower_bound_forward_search = lower_bound_previous.copy()
-
-            # Compute Bellman Residual and upper bounds
-            List_nodes_previous_delta = []
-            List_upper_bounds = []
-            for nodes_in_fsc in MyFSC.specF['list_of_nodes']:
-                List_nodes_previous_delta.append(nodes_in_fsc)
-                value_diff = nodes_in_fsc.specF['lower_bound']-nodes_in_fsc.specF['previous_lower_bound']
-                List_upper_bounds.append(value_diff)
-            Array_upper_bounds = numpy.absolute(numpy.asarray(List_upper_bounds))
-            max_residual = numpy.amax(Array_upper_bounds)
-            for nodes_in_fsc in enumerate(MyFSC.specF['list_of_nodes']) :
-                value_upper_bound_for_this_node = nodes_in_fsc.specF['lower_bound']+max_residual*self.specF['discounting_parameter']/(1-self.specF['discounting_parameter'])
-                nodes_in_fsc.update_upper_bound(value_upper_bound_for_this_node)
+        return b_posterior, proba_observation, proba_observation2
 
 
-            while self.specF['heuristic_search_error'] > self.specF['residual_epsilon'] and lower_bound_forward_search >= lower_bound_previous:
-
-                # decide which fringe node to expand
-                Best_first_value = 0
-                for nodes_in_fringes_id in MyFSC.specF['list_of_nodes']:
-                    node_in_fringe = MyFSC.find_node_from_nodeid(nodes_in_fringes_id)
-                    Expansion_value = (node_in_fringe.specF['upper_bound'] - node_in_fringe.specF['lower_bound'])*node_in_fringe.specF['reach_proba']*self.specF['discounting_parameter']**(node_in_fringe.specF['depth'])
-                    if Expansion_value>Best_first_value :
-                        expansion_node = nodes_in_fringes_id
-
-                # expand it, and compute belief state, reach proba, depth, then back up value
-                first=0
-                for index_observation, new_observation in enumerate(self.specF['possible_observations']):
-                    for node_suppl in MyFSC.specF['list_of_nodes'] :
-                        obs2_id = node.id
-                        if index_observation==0 : 
-                            node1=MyFSC.find_node_from_nodeid(expansion_node)
-                            node2=node_suppl
-                        elif index_observation==1 :
-                            node1 = node_suppl
-                            node2 = MyFSC.find_node_from_nodeid(expansion_node)
-                        for index_action, new_action in enumerate(self.specF['action_space']) :
-                            new_value_if_that_node_was_root = self.estimate_value_of_node(index_action,node1,node2,observation_matrix,transition_matrix,reward_matrix)
-                            value_of_belief_node = numpy.multiply(self.specF['initial_belief_state'],new_value_if_that_node_was_root)
-                            if first==0 :
-                                values_of_states = new_value_if_that_node_was_root.copy()
-                                value_of_new_node = value_of_belief_node.copy()
-                                List_action_obs1_ob2 = [new_action, node1.id, node2.id] 
-                                first=1
-                            elif value_of_belief_node > value_of_new_node :
-                                values_of_states = new_value_if_that_node_was_root.copy()
-                                value_of_new_node = value_of_belief_node.copy()
-                                List_action_obs1_ob2 = [new_action, node1.id, node2.id] 
-
-                self.specF['root_node_id'] = MyFSC.create_new_node(List_action_obs1_ob2[0], numpy.asarray([List_action_obs1_ob2[1], List_action_obs1_ob2[2]]), values_of_states,self.specF['initial_belief_state'])
-                List_new_nodes_from_forward_search_id.append(self.specF['root_node_id'].copy())
-
-                # back up belief state values
-                List_of_backup_nodes_id = []
-                List_node_to_back_up = [self.specF['root_node_id']]
-                depth_from_the_root = 1
-
-                while len(List_node_to_back_up)>0:
-                    node_to_back_up = List_node_to_back_up[0]
-                    List_node_to_back_up.remove(node_to_back_up)
-                    successors = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(node_to_back_up)].specF['successors']
-                    for index_observation, new_observation in enumerate(self.specF['possible_observations']) :
-                        if successors[index_observation] not in List_of_backup_nodes_id :
-                            node_successor = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(successors[index_observation])]
-                            # update the belief of the successor, as well as its reach proba and depth
-                            posterior_belief, proba_observations = self.update_Belief_Heuristic_Search(new_observation,MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(node_to_back_up)].specF['node_belief']) 
-                            print('TEST PROBA OBS')
-                            print(proba_observations)
-                            pdb.set_trace()
-                            MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(successors[index_observation])].specF['node_belief'] = posterior_belief
-                            MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(successors[index_observation])].specF['depth'] = depth_from_the_root
-                            MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(successors[index_observation])].specF['reach_proba'] = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(node_to_back_up)].specF['reach_proba']*proba_observations[index_observation]
-                            # add the updated node in the list
-                            List_of_backup_nodes_id.append(successors[index_observation])
-                            if successors[index_observation] not in List_node_to_back_up :
-                                List_node_to_back_up.append(successors[index_observation])
-                    depth_from_the_root+=1
-
-                # back up lower and upper bounds from the leaves of the search tree, to the root
-                # Compute Bellman Residual and upper bounds
-                List_upper_bounds = []
-                for nodes_in_fsc in MyFSC.specF['list_of_nodes']:
-                    nodes_in_fsc.update_lower_bound()
-                    value_diff = nodes_in_fsc.specF['lower_bound']-nodes_in_fsc.specF['previous_lower_bound']
-                    List_upper_bounds.append(value_diff)
-                Array_upper_bounds = numpy.absolute(numpy.asarray(List_upper_bounds))
-                max_residual = numpy.amax(Array_upper_bounds)
-                for nodes_in_fsc in enumerate(MyFSC.specF['list_of_nodes']) :
-                    value_upper_bound_for_this_node = nodes_in_fsc.specF['lower_bound']+max_residual*self.specF['discounting_parameter']/(1-self.specF['discounting_parameter'])
-                    nodes_in_fsc.update_upper_bound(value_upper_bound_for_this_node)
-
-                # testing termination of while loop
-                lower_bound_forward_search = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(self.specF['root_node_id'])].specF['lower_bound'].copy()
-                self.specF['heuristic_search_error'] = MyFSC.self.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(self.specF['root_node_id'])]['upper_bound']-MyFSC.self.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(self.specF['root_node_id'])]['lower_bound']
-
-            # (b) TEST TERMINATION
-            # The error bound is the difference between the upper and lower bounds on the value of the starting belief state
-            List_residual.append(self.specF['heuristic_search_error'])
-            if self.specF['heuristic_search_error'] < self.specF['residual_epsilon'] :
-                terminate = True
-                print("HEURISTIC SEARCH TERMINATED AT STEP "+str(step_of_iteration))
-                break # exit the while
-
-            # (c) Cleaning the reachable nodes, from the leaves to the root, old nodes are List_previousdelta_nodes_id, new added nodes are List_new_nodes_from_forward_search_id 
-            recompute_policy_eval = True
-            max_depth = MyFSC.compute_max_depth()
-            while max_depth>=0 :
-                for reachable_node_id in List_new_nodes_from_forward_search_id :
-                    reachable_node = MyFSC.find_node_from_nodeid(reachable_node_id)
-                    depth_for_this_node = reachable_node.specF['depth']
-                    if depth_for_this_node==max_depth :
-                        self.clean_fsc_from_new_nodes(MyFSC, List_nodes_previous_delta, reachable_node)
-                max_depth-=1
 
 
-            #(d) PRUNING 
-            List_of_new_nodeid_optimizing_starting_belief_state = [self.specF['root_node_id']]
-            List_node_ongoing = [self.specF['root_node_id']]
-            for node in List_node_ongoing :
-                List_node_ongoing.delete(node)
-                successors = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(node)].specF['successors']
-                for index_observation, new_observation in enumerate(self.specF['possible_observations']) :
-                    if successors[index_observation] not in List_of_new_nodeid_optimizing_starting_belief_state :
-                        List_of_new_nodeid_optimizing_starting_belief_state.append(successors[index_observation])
-                        List_node_ongoing.append(successors[index_observation])
 
-            for node in MyFSC.specF['list_of_nodes'] :
-                if node.id in List_of_new_nodeid_optimizing_starting_belief_state :
-                    continue
-                else :
-                    MyFSC.remove_node(node)
 
-            MyFSC.update_value_of_states()
-            MyFSC.plot(self.specF['name_to_save_folder'],step_of_iteration)   
-
-        self.plot_bellman_residual(List_residual)
-
-        return
+    
 
 
     def test_pointwise_dominance_heuristic(self, Previous_fsc_delta, new_node_fsc) : 
@@ -1246,30 +1072,44 @@ class Tiger:
         for node in Previous_fsc_delta :
             if numpy.sum(numpy.less_equal(node.specF['value_of_states']+numpy.ones(node.specF['value_of_states'].shape[0])*self.specF['precision_pointwise_dominance'],new_value))== new_value.shape[0] :
                 list_of_domination.append(node.id)
+        #print("DEBUG POINTWISE DOMINANCE")
         return list_of_domination
 
 
     def clean_fsc_from_new_nodes(self, FSC, Previous_fsc_delta, new_node_fsc):
+        print("\n\n\n\n\n\n\n\n\nCLEANING, FOCUSING ON NODE "+str(new_node_fsc.id))
+        redo_policyeval = False
+        print("\n\n ------------------------------------------------ DEBUG CLEANING ------------------------------------------------ ")
         # Test if the action and the successor links associated with it are the same as those of a machine state already in FSC (Delta in Hansen)
         test1, nodeid = self.test_equal_machine_state_heuristic(new_node_fsc,Previous_fsc_delta)
         if test1 :
+            print("EQUALITY MACHINE STATE")
+            print("\n ------------------------  REMOVING NODE ------------------------ "+str(new_node_fsc.id))
+            FSC.remove_node(FSC.specF['list_of_nodes'][FSC.find_node_from_nodeid(new_node_fsc.id)])
             for node in FSC.specF['list_of_nodes'] :
-                for index_observation, observation in self.specF['possible_observations'] :
-                    if node.specF['successors'][index_observation]==new_node_fsc.id :
+                for index_observation, observation in enumerate(self.specF['possible_observations']) :
+                    if node.specF['successors'][index_observation]==new_node_fsc.id:
                         node.specF['successors'][index_observation] = nodeid
-            FSC.remove_node(new_node_fsc)
         else : # Else test if the vector pointwise dominates a vector associated with a machine state in MyFSC
             liste_of_domination_test2 = self.test_pointwise_dominance_heuristic(Previous_fsc_delta, new_node_fsc)
             if len(liste_of_domination_test2)!=0 : # a new vector dominates old vectors
+                print(" ---------- debug dominance -----------")
+                redo_policyeval = True
+                print("POINTWISE DOMINANCE")
                 if len(liste_of_domination_test2)==1 : # only one old vector is dominated, the old vector will be changed
+                    print("Only one vector is dominated")
                     nodeid = liste_of_domination_test2[0]
+                    print(nodeid)
                     node_to_change = FSC.specF['list_of_nodes'][FSC.find_node_from_nodeid(nodeid)]
-                    node_to_change.modify_node_with_belief(new_node_fsc.specF['action'],new_node_fsc.specF['successors'],new_node_fsc.specF['value_of_states'], new_node_fsc.specF['node_belief'])
+                    node_to_change.modify_node_with_belief(new_node_fsc.specF['action'],new_node_fsc.specF['successors'],new_node_fsc.specF['value_of_states'], new_node_fsc.specF['node_belief'],new_node_fsc.specF['value_of_states_upper_bound'])
                     for node in FSC.specF['list_of_nodes'] :
-                        for index_observation, observation in self.specF['possible_observations'] :
+                        for index_observation, observation in enumerate(self.specF['possible_observations']) :
                             if node.specF['successors'][index_observation]==new_node_fsc.id :
                                 node.specF['successors'][index_observation] = nodeid
+                    #pdb.set_trace()
                 else : # more than one old vector is dominated, one old vector will be changed, and the other one deleted
+                    print("more than one old vector is dominated")
+                    #pdb.set_trace()
                     selected_node=False
                     List_of_node_to_merge = []
                     for other_node_id in liste_of_domination_test2 :
@@ -1280,9 +1120,9 @@ class Tiger:
                         if (other_node_id not in flattened_ids) and selected_node==False:
                             nodeid_to_merge_in = other_node_id
                             node_to_change = FSC.specF['list_of_nodes'][FSC.find_node_from_nodeid(nodeid_to_merge_in)]
-                            node_to_change.modify_node_with_belief(new_node_fsc.specF['action'],new_node_fsc.specF['successors'],new_node_fsc.specF['value_of_states'], new_node_fsc.specF['node_belief'])
+                            node_to_change.modify_node_with_belief(new_node_fsc.specF['action'],new_node_fsc.specF['successors'],new_node_fsc.specF['value_of_states'], new_node_fsc.specF['node_belief'],new_node_fsc.specF['value_of_states_upper_bound'])
                             for node in FSC.specF['list_of_nodes'] :
-                                for index_observation, observation in self.specF['possible_observations'] :
+                                for index_observation, observation in enumerate(self.specF['possible_observations']) :
                                     if node.specF['successors'][index_observation]==new_node_fsc.id :
                                         node.specF['successors'][index_observation] = nodeid_to_merge_in
                             selected_node=True
@@ -1291,28 +1131,719 @@ class Tiger:
                         pdb.set_trace()
 
                     # Merging the dominated machine states
+                    print('MERGING DOMINATED MACHINE STATES')
                     if len(List_of_node_to_merge)!=0 :
                         for node_merging_id in List_of_node_to_merge :
                             for node in FSC.specF['list_of_nodes'] :
-                                for index_observation, observation in self.specF['possible_observations'] :
+                                for index_observation, observation in enumerate(self.specF['possible_observations']) :
                                     if node.specF['successors'][index_observation]==node_merging_id :
                                         node.specF['successors'][index_observation] = nodeid_to_merge_in
 
                             node_to_delete = FSC.find_node_from_nodeid(node_merging_id)
+                            print("\n ------------------------  REMOVING NODE ------------------------ "+str(node_merging_id))
                             FSC.remove_node(FSC.specF['list_of_nodes'][node_to_delete])
-
+                print('REMOVE NODE CLEANED')
+                print("\n ------------------------  REMOVING NODE ------------------------ "+str(new_node_fsc.id))
                 FSC.remove_node(new_node_fsc)
             else : # no domination at all, we keep this new machine state
-                print('machine state '+str(new_node_fsc.id)+' kept into the FSC')            
+                print('NO CLEANING : machine state '+str(new_node_fsc.id)+' kept into the FSC')  
 
-        # recompute depth for all machine states
+        print("WHAT HAPPENED DURING CLEANING ?")
+        print(new_node_fsc.specF['value_of_states'])
+        print(Previous_fsc_delta[0].specF['value_of_states'])
+        return redo_policyeval   
 
 
 
+
+
+
+    """ # Previous version before Oct 12
+    def find_new_root_id(self,FSC) :
+        compteur_root = 0
+        for node_in_fsc in FSC.specF['list_of_nodes'] :
+            if numpy.sum(node_in_fsc.specF['node_belief']==self.specF['initial_belief_state'])== self.specF['initial_belief_state'].shape[0]:
+                FSC.specF['root_node_id']=node_in_fsc.id
+                compteur_root+=1
+        if compteur_root!= 1 : 
+            print("probleme redefinition of root")
+            print("DEBUG FIND NEW ROOT NODE")
+            print(FSC.list_of_belief_states())
+            print(FSC.list_of_ids())
+            pdb.set_trace()
+        return
+    """
+
+    def find_new_root_id(self,FSC) :
+        FSC.update_value_of_states()
+        Matrix = FSC.specF['value_of_states'].copy().T
+        Values_of_initial_belief_state = numpy.matmul(Matrix,self.specF['initial_belief_state'])
+        Index_min_value_of_initial_belief_state = numpy.argmax(Values_of_initial_belief_state)
+        FSC.specF['root_node_id'] = FSC.specF['list_of_nodes'][Index_min_value_of_initial_belief_state].id
+        return 
+
+
+    def recompute_belief_depth_proba_from_root(self,FSC) : # This function updates the reach probability and the depth from the new root node, by applying Bayes Rule to update belief value in the FSC
+        #print("\nroot node is now "+str(FSC.specF['root_node_id']))
+        List_of_nodes_id_to_recompute = [FSC.specF['root_node_id']]
+        List_of_nodes_id_already_recomputed = [FSC.specF['root_node_id']]
+        depth_from_the_root=1
+        FSC.specF['list_of_nodes'][FSC.find_node_from_nodeid(FSC.specF['root_node_id'])].specF['depth'] = 0
+        FSC.specF['list_of_nodes'][FSC.find_node_from_nodeid(FSC.specF['root_node_id'])].specF['reach_proba'] = 1
+        while len(List_of_nodes_id_to_recompute)>0:
+            for node_to_back_up_id in List_of_nodes_id_to_recompute : # this is the id of the current node to back up
+                #print("node id is "+str(node_to_back_up_id))
+                #for node in FSC.specF['list_of_nodes'] :
+                    #print(node.id)
+                node_to_back_up = FSC.specF['list_of_nodes'][FSC.find_node_from_nodeid(node_to_back_up_id)]
+                node_to_back_up.update_lower_bound()
+                #node_to_back_up.update_upper_bound()
+                successors = node_to_back_up.specF['successors']
+                if successors[0]==successors[1] :
+                    if node_to_back_up.id != 0 :
+                        print('SAME SUCCESSORS')
+                        #pdb.set_trace()
+                    if successors[0] not in List_of_nodes_id_already_recomputed :
+                        node_successor = FSC.specF['list_of_nodes'][FSC.find_node_from_nodeid(successors[0])]
+                        posterior_belief, proba_observations, proba_observations2 = self.update_Belief_Heuristic_Search("TL",node_to_back_up.specF['node_belief'],node_to_back_up.specF['action'],True) 
+                        node_successor.specF['node_belief'] = posterior_belief
+                        node_successor.specF['depth'] = depth_from_the_root
+                        if depth_from_the_root==1 :
+                            node_successor.specF['reach_proba'] = proba_observations + proba_observations2
+                        else :
+                            node_successor.specF['reach_proba'] = node_to_back_up.specF['reach_proba']*(proba_observations + proba_observations2)                        
+                            # add the updated node in the list
+                        List_of_nodes_id_already_recomputed.append(successors[0])
+                        node_successor.update_lower_bound() # DO WE NEED THIS ?
+                        if successors[0] not in List_of_nodes_id_to_recompute :
+                            List_of_nodes_id_to_recompute.append(node_successor.id)
+                else :
+                    for index_observation, new_observation in enumerate(self.specF['possible_observations']) :
+                        if successors[index_observation] not in List_of_nodes_id_already_recomputed :
+                            node_successor = FSC.specF['list_of_nodes'][FSC.find_node_from_nodeid(successors[index_observation])]
+                            # update the belief of the successor, as well as its reach proba and depth
+                            posterior_belief, proba_observations, proba_obs_none = self.update_Belief_Heuristic_Search(new_observation,node_to_back_up.specF['node_belief'],node_to_back_up.specF['action'],False) 
+                            #print('previous belief associated to node '+str(successors[index_observation]))
+                            #print(node_successor.specF['node_belief'])
+                            node_successor.specF['node_belief'] = posterior_belief
+                            #print('new belief associated to node '+str(successors[index_observation]))
+                            #print(node_successor.specF['node_belief'])
+                            #print('\n')
+                            node_successor.specF['depth'] = depth_from_the_root
+                            if depth_from_the_root==1 :
+                                node_successor.specF['reach_proba'] = proba_observations
+                            else :
+                                node_successor.specF['reach_proba'] = node_to_back_up.specF['reach_proba']*proba_observations
+                            # add the updated node in the list
+                            List_of_nodes_id_already_recomputed.append(successors[index_observation])
+                            node_successor.update_lower_bound() # DO WE NEED THIS ?
+                            #node_successor.update_upper_bound()
+                            if successors[index_observation] not in List_of_nodes_id_to_recompute :
+                                List_of_nodes_id_to_recompute.append(node_successor.id)
+                List_of_nodes_id_to_recompute.remove(node_to_back_up_id)
+            depth_from_the_root+=1
+        return
+
+
+
+
+    """
+    def compute_bellman_residual_and_upper_bounds(self, Current_search_tree_id, FSC) : # This function takes a list of ids in the current search tree, and computes the upper bound. 
+        # back up upper bound
+        # Compute Bellman Residual and upper bounds
+        List_upper_bounds = []
+        for nodes_in_fsc_id in Current_search_tree_id :
+            nodes_in_fsc = FSC.specF['list_of_nodes'][FSC.find_node_from_nodeid(nodes_in_fsc_id)]
+            value_diff = nodes_in_fsc.specF['lower_bound']-nodes_in_fsc.specF['previous_lower_bound']
+            List_upper_bounds.append(value_diff)
+        Array_upper_bounds = numpy.absolute(numpy.asarray(List_upper_bounds))
+        max_residual = numpy.amax(Array_upper_bounds)
+        print("COMPUTATION OF UPPER BOUND")
+        print(Array_upper_bounds)
+        for nodes_in_fsc_id in Current_search_tree_id :
+            nodes_in_fsc = FSC.specF['list_of_nodes'][FSC.find_node_from_nodeid(nodes_in_fsc_id)]
+            value_upper_bound_for_this_node = nodes_in_fsc.specF['lower_bound']+max_residual*self.specF['discounting_parameter']/(1-self.specF['discounting_parameter'])
+            nodes_in_fsc.update_upper_bound(value_upper_bound_for_this_node)
+        return
+    """
+
+
+
+
+
+# ---------------------------------- HEURISTIC SEARCH, HANSEN 1998, 2ND VERSION ----------------------------------
  
+    def compute_HeuristicSearch(self): # Hansen 1998
+
+        # Initialise reward matrix, transition matrix and observation matrix
+        transition_matrix = self.get_transition_matrix()
+        reward_matrix = self.get_reward_matrix()
+        observation_matrix = self.get_observation_matrix()
+
+        step_of_iteration = 0  # iteration step number of the entire algorithm
+        terminate = False
+        List_residual = []
+        recompute_policy_eval = True
+
+        
+        # INITIALISATION : specify an initial FSC, the initial FSC I choose is going to be constituted of the action listen as a node, with connectivity on themselves
+        # Difference with policy iteration, we compute everything only for point-evaluated belief states
+        MyFSC = FiniteStateController({'possible_observations': self.specF['possible_observations'],'state_space':self.specF['state_space'],'heuristic':True})
+        # Policy evaluation of the initial state |S| x |nodes|
+        
+        index_action=2 # ACTION LISTEN
+        new_action = 'LISTEN'
+        successors=numpy.asarray([0,0])
+        
+        new_values = reward_matrix[index_action,:]
+        #new_values_upper_bound = self.specF['initial_value_upper_bound']
+        # We choose the value of the initial node to be very low, the previous value will be even lower to produce an initial upper bound very high
+        new_node_id = MyFSC.create_new_node_with_bounds(new_action, successors, new_values,self.specF['initial_belief_state'],None)
+
+        MyFSC.plot(self.specF['name_to_save_folder'],step_of_iteration) 
 
 
 
+        while terminate==False :
+
+            print('\n--------- ITERATION STEP ---------'+str(step_of_iteration))
+
+            # POLICY EVALUATION of the FSC, if needed from previous step changes. We solve it iteratively till convergence.
+            if recompute_policy_eval :
+                print(" ------------------- POLICY EVALUATION ------------------- ")
+                value_has_converged = numpy.zeros(len(MyFSC.specF['list_of_nodes']),dtype=bool)
+                #print("--------- --------- --------- DEBUG POLICY EVAL --------- --------- --------- ")
+                while numpy.all(value_has_converged)==False: # while the elements of value_has_converged are not all equal to True
+                    for nodes_in_fsc in MyFSC.specF['list_of_nodes'] :
+                        index_node = MyFSC.specF['list_of_nodes'].index(nodes_in_fsc)
+                        #print("NEW LOOP FOR POLICY EVAL")
+                        if value_has_converged[index_node]==False : # value has not converged yet for this node
+                            old_value = nodes_in_fsc.specF['value_of_states']
+                            index_action = numpy.where(nodes_in_fsc.specF['action']==self.specF['action_space'])[0][0]
+                            node1 = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(nodes_in_fsc.specF['successors'][0])]
+                            node2 = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(nodes_in_fsc.specF['successors'][1])]
+
+                            new_values = self.estimate_value_of_node(index_action,node1,node2,observation_matrix,transition_matrix,reward_matrix)
+                            if numpy.sum(numpy.equal(new_values,old_value))!=new_values.shape[0] : # the value changed
+                                nodes_in_fsc.specF['value_of_states'] = new_values.copy()
+                            else :
+                                value_has_converged[index_node] = True
+
+            self.find_new_root_id(MyFSC)
+
+            #if step_of_iteration==0 :
+                #MyFSC.specF['list_of_nodes'][0].specF['previous_value_of_states'] = numpy.ones(self.specF['state_space'].shape[0])*self.specF['reward_from_opening_the_wrong_door']
+            
+            MyFSC.compute_max_diff_value_of_states_all()
+            residual = self.specF['discounting_parameter']*MyFSC.specF['max_iteration_step']/(1-self.specF['discounting_parameter'])
+            for index_node, node in enumerate(MyFSC.specF['list_of_nodes']) :
+                node.specF['value_of_states_upper_bound'] = node.specF['value_of_states']+residual*numpy.ones(self.specF['state_space'].shape[0])
+                node.update_lower_bound()
+                node.update_upper_bound()
 
 
+            #print(MyFSC.specF['max_iteration_step'])
+            #pdb.set_trace()
+
+
+            # Initialize the heuristic search error to a very high value
+            MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(MyFSC.specF['root_node_id'])].update_lower_bound()
+            MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(MyFSC.specF['root_node_id'])].update_upper_bound()
+            self.specF['heuristic_search_error'] = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(MyFSC.specF['root_node_id'])].specF['upper_bound']-MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(MyFSC.specF['root_node_id'])].specF['lower_bound']
+            List_residual.append(self.specF['heuristic_search_error'])
+    
+
+            print("\nAFTER POLICY EVALUATION")
+            MyFSC.print_state_of_fsc()
+
+
+            # POLICY IMPROVEMENT
+            #MyFSC.update_value_of_states()
+
+            # Initialise the lower bound, of the previous starting belief state, and of the new belief state of the iteration, for comparison about when to exit the loop
+            lower_bound_previous = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(MyFSC.specF['root_node_id'])].specF['lower_bound'].copy()
+            # (a) FORWARD SEARCH
+            lower_bound_forward_search = lower_bound_previous.copy()
+            
+            List_new_nodes_from_forward_search_id = [] # List of id of nodes that have been added by forward search
+
+            List_nodes_previous_delta = []   # the list of nodes of the initial FSC, before policy improvement
+            for nodes_in_fsc in MyFSC.specF['list_of_nodes']:
+                List_nodes_previous_delta.append(nodes_in_fsc)
+            
+
+            # Compute Bellman Residual and upper bounds
+            # self.compute_bellman_residual_and_upper_bounds(MyFSC.list_of_ids(),MyFSC) # IS THIS USEFUL ? not sure because we use only the new search tree to compute upper bounds if I understood well
+
+            print("\nBEFORE LOOP")
+            #pdb.set_trace()
+            
+
+            looping = 0 # index of the iteration of the forward search
+            List_of_tip_nodes_id = []
+            while lower_bound_forward_search <= lower_bound_previous and self.specF['heuristic_search_error'] > self.specF['residual_epsilon'] : # continue until either the lower bound of the starting belief state is improved or the error bound on the value of the starting belief state is less than or equal to epsilon
+                print("ANOTHER EXPANSION OF THE SEARCH TREE")
+                print("\n --------------- --------------- LOOPING IS "+str(looping)+" --------------- --------------- ")
+                if not os.path.exists(self.specF['name_to_save_folder']+'/looping_iteration_'+str(step_of_iteration)+'/'):
+                    os.makedirs(self.specF['name_to_save_folder']+'/looping_iteration_'+str(step_of_iteration)+'/')
+                print("\n\nWhile loop with error being "+str(self.specF['heuristic_search_error'])+" and bound forward search being "+str(lower_bound_forward_search)+" compared to "+str(lower_bound_previous)+"\n\n")
+
+                if looping == 0 : # extend root node, start of the forward search
+                    """
+                    if step_of_iteration == 0 :
+                        new_root_node = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(MyFSC.specF['root_node_id'])]
+                        List_of_tip_nodes_id.append(new_root_node.id)
+                    else :
+                    """
+                        
+                    # Find the best action to do with best pointers to other nodes, and the worst
+                    first=0
+                    for index_observation, new_observation in enumerate(self.specF['possible_observations']):
+                        for node1 in MyFSC.specF['list_of_nodes'] :
+                            for node2 in MyFSC.specF['list_of_nodes'] :
+                                for index_action, new_action in enumerate(self.specF['action_space']) :
+                                    new_value_if_that_node_was_root = self.estimate_value_of_node(index_action,node1,node2,observation_matrix,transition_matrix,reward_matrix)
+                                    value_of_belief_node = numpy.sum(numpy.multiply(self.specF['initial_belief_state'],new_value_if_that_node_was_root))
+                                    if first==0 :
+                                        values_of_states = new_value_if_that_node_was_root.copy()
+                                        value_of_new_node = value_of_belief_node.copy()
+                                        List_action_obs1_ob2 = [new_action, node1.id, node2.id] 
+                                        first=1
+                                    elif value_of_belief_node > value_of_new_node :
+                                        values_of_states = new_value_if_that_node_was_root.copy()
+                                        value_of_new_node = value_of_belief_node.copy()
+                                        List_action_obs1_ob2 = [new_action, node1.id, node2.id] 
+                    # now that we have the lower bound value function, we compute the upper bound value function
+                    MyFSC.specF['root_node_id'] = MyFSC.create_new_node_with_bounds(List_action_obs1_ob2[0], numpy.asarray([List_action_obs1_ob2[1], List_action_obs1_ob2[2]]), values_of_states,self.specF['initial_belief_state'],None)
+                    new_root_node = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(MyFSC.specF['root_node_id'])]
+                    List_new_nodes_from_forward_search_id.append(MyFSC.specF['root_node_id'])
+
+                    """
+                    MyFSC.compute_max_diff_value_of_states(List_new_nodes_from_forward_search_id)
+                    residual = self.specF['discounting_parameter']*MyFSC.specF['max_iteration_step']/(1-self.specF['discounting_parameter'])
+                    """
+                    for index_node, node in enumerate(MyFSC.specF['list_of_nodes']) :
+                        node.specF['value_of_states_upper_bound'] = node.specF['value_of_states']+residual*numpy.ones(self.specF['state_space'].shape[0])
+                        node.update_lower_bound()
+                        #node.update_upper_bound()
+
+
+                    #MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(MyFSC.specF['root_node_id'])].specF['value_of_states_upper_bound'] = values_of_states+residual*numpy.ones(self.specF['state_space'].shape[0])
+                    
+                    
+                    # RECOMPUTE BELIEFS, DEPTH, AND REACH PROBA
+                    self.recompute_belief_depth_proba_from_root(MyFSC)
+                    # BACK UP UPPER BOUNDS
+                    #self.compute_bellman_residual_and_upper_bounds(List_new_nodes_from_forward_search_id,MyFSC)
+                    print("\nAFTER CREATING NEW INITIAL BELIEF STATE NODE")
+                    print("New initial belief state node created "+str(MyFSC.specF['root_node_id']))
+                    MyFSC.print_state_of_fsc()
+                    print("End of Looping 0")
+                    List_of_tip_nodes_id.append(new_root_node.id)
+                    #pdb.set_trace()
+
+                else :
+
+                    # decide which fringe node to expand 
+                    print("Deciding on the node to expand")
+
+                    for index_node, node in enumerate(MyFSC.specF['list_of_nodes']) :
+                        node.specF['previous_value_of_states'] = node.specF['value_of_states'].copy()
+                        node.update_lower_bound()
+                        node.update_upper_bound()
+
+                    print(MyFSC.specF['max_iteration_step'])
+                    #expansion_node = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(List_new_nodes_from_forward_search_id[-1])]
+                    Best_first_value = -10000000000
+                    expansion_node = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(List_of_tip_nodes_id[0])]
+                    if len(List_of_tip_nodes_id)>1 : # if ==1, it's the new_root_node that we want to expand
+                        for node_in_fringe_id in List_of_tip_nodes_id :
+                            node_in_fringe = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(node_in_fringe_id)]
+                            print("\n")
+                            print("Node id is "+str(node_in_fringe_id))
+                            print(node_in_fringe.specF['upper_bound'])
+                            print(node_in_fringe.specF['lower_bound'])
+                            Expansion_value = (node_in_fringe.specF['upper_bound'] - node_in_fringe.specF['lower_bound'])*node_in_fringe.specF['reach_proba']*(self.specF['discounting_parameter']**(node_in_fringe.specF['depth']))
+                            print(Expansion_value)
+                            print("\n")
+                            if Expansion_value > Best_first_value :
+                                expansion_node = node_in_fringe # an element of Node class
+                                Best_first_value = Expansion_value
+                    List_of_tip_nodes_id.remove(expansion_node.id)
+        
+
+                    print("Expansion to do on node "+str(expansion_node.id))
+                    #pdb.set_trace()
+                    # expand the node. Several cases : 1) the 2 observations go on the same new node, index_expansion 1, only one node is created, 2) one observation goes onto a new node, the other one stays the same, only 1 node is created, index_expansion 2 and 2, 3) two new nodes are created for the two possible observations, index_expansion 4
+
+                    
+                    # Expand the search tree by choosing the best lower value for the expansion node
+                    first=0
+                    # opening the expansion node
+                    new_node_created_id = MyFSC.specF['counter']
+                    new_node_created_id_2 = MyFSC.specF['counter']+1
+                    two_nodes_created = False
+                    
+                    # creating 2 disctinct nodes
+                    for node1 in MyFSC.specF['list_of_nodes'] :
+                        for node2 in MyFSC.specF['list_of_nodes'] :
+                            for node1_2 in MyFSC.specF['list_of_nodes'] :
+                                for node2_2 in MyFSC.specF['list_of_nodes'] :
+                                    for index_action, new_action in enumerate(self.specF['action_space']) :
+                                        for index_action_2, new_action_2 in enumerate(self.specF['action_space']) :
+                                            Copy_of_successors_expansion_node = numpy.asarray([new_node_created_id,new_node_created_id_2])
+                                            posterior_belief, proba_observations, proba_obs_none = self.update_Belief_Heuristic_Search("TL",expansion_node.specF['node_belief'],expansion_node.specF['action'],False)
+                                            value_of_extra_node_temp = self.estimate_value_of_node(index_action,node1,node2,observation_matrix,transition_matrix,reward_matrix)
+                                            # back up lower value of expansion node
+                                            lower_bound_extra_node = numpy.sum(numpy.multiply(posterior_belief,value_of_extra_node_temp))
+                                            posterior_belief_2, proba_observations_2, proba_obs_none = self.update_Belief_Heuristic_Search("TR",expansion_node.specF['node_belief'],expansion_node.specF['action'],False)
+                                            value_of_extra_node_temp_2 = self.estimate_value_of_node(index_action_2,node1_2,node2_2,observation_matrix,transition_matrix,reward_matrix)
+                                            # back up lower value of expansion node
+                                            lower_bound_extra_node_2 = numpy.sum(numpy.multiply(posterior_belief_2,value_of_extra_node_temp_2))
+                                            node2_values = value_of_extra_node_temp_2
+                                            node1_values = value_of_extra_node_temp
+                                            index_action_temp = numpy.where(expansion_node.specF['action']==self.specF['action_space'])[0][0]
+                                            new_value_of_expansion_node_temp_forallstates = self.estimate_value_of_node_during_forwardsearch(index_action_temp,node1_values,node2_values,observation_matrix,transition_matrix,reward_matrix)
+                                            new_value_of_expansion_node_temp = numpy.sum(numpy.multiply(expansion_node.specF['node_belief'],new_value_of_expansion_node_temp_forallstates))
+
+                                            if first==0 :
+                                                New_successors_of_expansion_node = Copy_of_successors_expansion_node.copy()
+                                                List_action_obs1_ob2 = [new_action, node1.id, node2.id] 
+                                                new_value_of_expansion_node = new_value_of_expansion_node_temp.copy()
+                                                new_value_of_expansion_node_forallstates = new_value_of_expansion_node_temp_forallstates.copy()
+                                                value_of_extra_node = value_of_extra_node_temp.copy()
+                                                belief_of_extra_node = posterior_belief.copy()
+                                                List_action_obs1_ob2_2 = [new_action_2, node1_2.id, node2_2.id] 
+                                                value_of_extra_node_2 = value_of_extra_node_temp_2.copy()
+                                                belief_of_extra_node_2 = posterior_belief_2.copy()
+                                                two_nodes_created = True
+                                                first = 1
+                                            if new_value_of_expansion_node_temp > new_value_of_expansion_node :
+                                                New_successors_of_expansion_node = Copy_of_successors_expansion_node.copy()
+                                                List_action_obs1_ob2 = [new_action, node1.id, node2.id] 
+                                                new_value_of_expansion_node = new_value_of_expansion_node_temp.copy()
+                                                new_value_of_expansion_node_forallstates = new_value_of_expansion_node_temp_forallstates.copy()
+                                                value_of_extra_node = value_of_extra_node_temp.copy()
+                                                belief_of_extra_node = posterior_belief.copy()
+                                                List_action_obs1_ob2_2 = [new_action_2, node1_2.id, node2_2.id] 
+                                                value_of_extra_node_2 = value_of_extra_node_temp_2.copy()
+                                                belief_of_extra_node_2 = posterior_belief_2.copy()
+                                                two_nodes_created = True
+                                                
+                                            if expansion_node.id==1 :
+                                                print('\n')
+                                                print("Creating 2 new nodes for each observation")
+                                                print(Copy_of_successors_expansion_node)
+                                                print(new_value_of_expansion_node_temp)
+                                                print(new_value_of_expansion_node_temp_forallstates)
+                                                print(new_action)
+                                                print(new_action_2)
+                                                print('\n')
+                                                #pdb.set_trace()
+                                                
+                    # creating one new node for only 1 observation
+                    for index_expansion in range(2) :
+                        for index_action, new_action in enumerate(self.specF['action_space']) :
+                            for node1 in MyFSC.specF['list_of_nodes'] :
+                                for node2 in MyFSC.specF['list_of_nodes'] :
+                                    # link to the opened node
+                                    # Here do we keep one of the same link as before, or we reset both links ? 
+                                    if index_expansion==0 : # obs 0 to new node 
+                                        Copy_of_successors_expansion_node = numpy.asarray([new_node_created_id,expansion_node.specF['successors'][1]])
+                                        new_observation = "TL"
+                                    elif index_expansion == 1 : # obs 1 to new node
+                                        Copy_of_successors_expansion_node = numpy.asarray([expansion_node.specF['successors'][0],new_node_created_id])
+                                        new_observation = "TR"
+                                    posterior_belief, proba_observations,proba_obs_none = self.update_Belief_Heuristic_Search(new_observation,expansion_node.specF['node_belief'],expansion_node.specF['action'],False)
+                                    value_of_extra_node_temp = self.estimate_value_of_node(index_action,node1,node2,observation_matrix,transition_matrix,reward_matrix)
+                                    # back up lower value of expansion node
+                                    lower_bound_extra_node = numpy.sum(numpy.multiply(posterior_belief,value_of_extra_node_temp))
+                                    if index_expansion==0 :
+                                        node1_values = value_of_extra_node_temp
+                                        node2_values = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(expansion_node.specF['successors'][1])].specF['value_of_states']
+                                    elif index_expansion==1 :
+                                        node2_values = value_of_extra_node_temp
+                                        node1_values = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(expansion_node.specF['successors'][0])].specF['value_of_states']
+
+                                    index_action_temp = numpy.where(expansion_node.specF['action']==self.specF['action_space'])[0][0]
+                                    new_value_of_expansion_node_temp_forallstates = self.estimate_value_of_node_during_forwardsearch(index_action_temp,node1_values,node2_values,observation_matrix,transition_matrix,reward_matrix)
+                                    new_value_of_expansion_node_temp = numpy.sum(numpy.multiply(expansion_node.specF['node_belief'],new_value_of_expansion_node_temp_forallstates))
+
+                                    if first==0 :
+                                        New_successors_of_expansion_node = Copy_of_successors_expansion_node.copy()
+                                        List_action_obs1_ob2 = [new_action, node1.id, node2.id] 
+                                        new_value_of_expansion_node = new_value_of_expansion_node_temp.copy()
+                                        new_value_of_expansion_node_forallstates = new_value_of_expansion_node_temp_forallstates.copy()
+                                        value_of_extra_node = value_of_extra_node_temp.copy()
+                                        belief_of_extra_node = posterior_belief.copy()
+                                        two_nodes_created = False
+                                        first = 1
+                                    if new_value_of_expansion_node_temp > new_value_of_expansion_node :
+                                        New_successors_of_expansion_node = Copy_of_successors_expansion_node.copy()
+                                        List_action_obs1_ob2 = [new_action, node1.id, node2.id] 
+                                        new_value_of_expansion_node = new_value_of_expansion_node_temp.copy()
+                                        new_value_of_expansion_node_forallstates = new_value_of_expansion_node_temp_forallstates.copy()
+                                        value_of_extra_node = value_of_extra_node_temp.copy()
+                                        belief_of_extra_node = posterior_belief.copy()
+                                        two_nodes_created = False
+                                        
+                                        if expansion_node.id==1 :
+                                            print('\n')
+                                            print("Creating a single node for one observation")
+                                            print(Copy_of_successors_expansion_node)
+                                            print(new_value_of_expansion_node_temp)
+                                            print(new_value_of_expansion_node_temp_forallstates)
+                                            print(new_action)
+                                            print('\n')
+                                            #pdb.set_trace()
+                                    
+                    
+
+                                                
+                    
+                    # create the best node when considering the lower value of the expansion node
+                    check_node_id = MyFSC.create_new_node_with_bounds(List_action_obs1_ob2[0], numpy.asarray([List_action_obs1_ob2[1], List_action_obs1_ob2[2]]), value_of_extra_node, belief_of_extra_node, None)
+                    if check_node_id!=new_node_created_id :
+                        print("PROBLEME NODE CREATED ID")
+                        pdb.set_trace()
+                    List_of_tip_nodes_id.append(check_node_id)
+
+                    if two_nodes_created :
+                        check_node_id_2 = MyFSC.create_new_node_with_bounds(List_action_obs1_ob2_2[0], numpy.asarray([List_action_obs1_ob2_2[1], List_action_obs1_ob2_2[2]]), value_of_extra_node_2, belief_of_extra_node_2, None)
+                        if check_node_id_2!=new_node_created_id_2 :
+                            print("PROBLEME NODE CREATED ID")
+                            pdb.set_trace()
+                        List_of_tip_nodes_id.append(check_node_id_2)
+
+                    # change the successors of the expansion node to the node created. Hence its value changes too
+                    expansion_node.specF['successors'] = New_successors_of_expansion_node
+                    expansion_node.specF['value_of_states'] = new_value_of_expansion_node_forallstates
+                    expansion_node.update_lower_bound()
+                    if expansion_node.specF['lower_bound'] != new_value_of_expansion_node :
+                        print("PROBLEME LOWER BOUND EXPANSION NODE")
+                        pdb.set_trace()
+
+                    MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(new_node_created_id)].update_lower_bound()
+                    if two_nodes_created :
+                        MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(new_node_created_id_2)].update_lower_bound()
+
+                    # RECOMPUTE BELIEFS, DEPTH, AND REACH PROBA
+                    self.recompute_belief_depth_proba_from_root(MyFSC)
+
+                    # back up value of states and lower bounds of all nodes higher than expansion node
+                    if expansion_node.id != MyFSC.specF['root_node_id'] :
+                        Continue_backup_in_search_tree = True
+                        List_node_id_to_back_up = [expansion_node.id]
+                        List_already_backedup = [expansion_node.id]
+                        while Continue_backup_in_search_tree :
+                            if len(List_node_id_to_back_up)==0 :
+                                Continue_backup_in_search_tree=False
+                            else :
+                                List_new_nodes_to_backup_temp = []
+                                for node_id_to_back_up in List_node_id_to_back_up :
+                                    for node_in_fsc_id in List_new_nodes_from_forward_search_id :
+                                        node_in_fsc_search_tree = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(node_in_fsc_id)]
+                                        if node_in_fsc_search_tree.specF['successors'][0]==node_id_to_back_up or node_in_fsc_search_tree.specF['successors'][1]==node_id_to_back_up :
+                                            if node_in_fsc_id not in List_already_backedup :
+                                                node1_values = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(node_in_fsc_search_tree.specF['successors'][0])].specF['value_of_states']
+                                                node2_values = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(node_in_fsc_search_tree.specF['successors'][1])].specF['value_of_states'] 
+                                                #node1_values_upperbound = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(node_in_fsc_search_tree.specF['successors'][0])].specF['value_of_states_upper_bound']
+                                                #node2_values_upperbound = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(node_in_fsc_search_tree.specF['successors'][1])].specF['value_of_states_upper_bound'] 
+                                                index_action_temp = numpy.where(node_in_fsc_search_tree.specF['action']==self.specF['action_space'])[0][0]
+                                                node_in_fsc_search_tree.specF['value_of_states'] = self.estimate_value_of_node_during_forwardsearch(index_action_temp,node1_values,node2_values,observation_matrix,transition_matrix,reward_matrix)
+                                                #node_in_fsc_search_tree.specF['value_of_states_upper_bound'] = self.estimate_value_of_node_during_forwardsearch(index_action_temp,node1_values_upperbound,node2_values_upperbound,observation_matrix,transition_matrix,reward_matrix)
+                                                node_in_fsc_search_tree.update_lower_bound()
+                                                #node_in_fsc_search_tree.update_upper_bound()
+                                                if node_in_fsc_id!=MyFSC.specF['root_node_id'] :
+                                                    List_new_nodes_to_backup_temp.append(node_in_fsc_id) 
+                                    if node_id_to_back_up not in List_already_backedup :
+                                        List_already_backedup.append(node_id_to_back_up)
+                                List_node_id_to_back_up = List_new_nodes_to_backup_temp.copy()
+
+
+                    #print("\n\nCOMPUTE MAX LOOPING STEP "+str(looping))
+                    MyFSC.compute_max_diff_value_of_states(List_new_nodes_from_forward_search_id)
+                    #print(MyFSC.specF['max_iteration_step'])
+                    #print("-------------------------------------------------------------------------")
+                    #pdb.set_trace()
+                    MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(new_node_created_id)].specF['value_of_states_upper_bound'] =  MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(new_node_created_id)].specF['value_of_states'] + numpy.ones(self.specF['state_space'].shape[0])*MyFSC.specF['max_iteration_step']*self.specF['discounting_parameter']/(1-self.specF['discounting_parameter'])
+
+                    MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(new_node_created_id)].update_upper_bound()
+                    List_new_nodes_from_forward_search_id.append(new_node_created_id)
+                    if two_nodes_created :
+                        MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(new_node_created_id_2)].specF['value_of_states_upper_bound'] =  MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(new_node_created_id_2)].specF['value_of_states'] + numpy.ones(self.specF['state_space'].shape[0])*MyFSC.specF['max_iteration_step']*self.specF['discounting_parameter']/(1-self.specF['discounting_parameter'])
+                        MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(new_node_created_id_2)].update_upper_bound()
+                        List_new_nodes_from_forward_search_id.append(new_node_created_id_2)
+
+                    # back up upperbound by considering only the nodes in the current search tree, so that we can choose the correct node to expand at the next looping
+
+                    if expansion_node.id != MyFSC.specF['root_node_id'] :
+                        Continue_backup_in_search_tree = True
+                        List_node_id_to_back_up = [expansion_node.id]
+                        List_already_backedup = [expansion_node.id]
+                        while Continue_backup_in_search_tree :
+                            if len(List_node_id_to_back_up)==0 :
+                                Continue_backup_in_search_tree=False
+                            else :
+                                List_new_nodes_to_backup_temp = []
+                                for node_id_to_back_up in List_node_id_to_back_up :
+                                    for node_in_fsc_id in List_new_nodes_from_forward_search_id :
+                                        node_in_fsc_search_tree = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(node_in_fsc_id)]
+                                        if node_in_fsc_search_tree.specF['successors'][0]==node_id_to_back_up or node_in_fsc_search_tree.specF['successors'][1]==node_id_to_back_up :
+                                            if node_in_fsc_id not in List_already_backedup :
+                                                node1_values_upperbound = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(node_in_fsc_search_tree.specF['successors'][0])].specF['value_of_states_upper_bound']
+                                                node2_values_upperbound = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(node_in_fsc_search_tree.specF['successors'][1])].specF['value_of_states_upper_bound'] 
+                                                index_action_temp = numpy.where(node_in_fsc_search_tree.specF['action']==self.specF['action_space'])[0][0]
+                                                node_in_fsc_search_tree.specF['value_of_states_upper_bound'] = self.estimate_value_of_node_during_forwardsearch(index_action_temp,node1_values_upperbound,node2_values_upperbound,observation_matrix,transition_matrix,reward_matrix)
+                                                node_in_fsc_search_tree.update_upper_bound()
+                                                if node_in_fsc_id!=MyFSC.specF['root_node_id'] :
+                                                    List_new_nodes_to_backup_temp.append(node_in_fsc_id) 
+                                    if node_id_to_back_up not in List_already_backedup :
+                                        List_already_backedup.append(node_id_to_back_up)
+                                List_node_id_to_back_up = List_new_nodes_to_backup_temp.copy()
+                    
+
+                    #self.compute_bellman_residual_and_upper_bounds(List_new_nodes_from_forward_search_id,MyFSC)
+
+                    print("\nAFTER EXPANDING A NODE")
+                    print("Node of expansion "+str(expansion_node.id))
+                    print("Node created "+str(new_node_created_id))
+                    if two_nodes_created :
+                        print("SECOND NODE CREATED "+str(new_node_created_id_2))
+                    MyFSC.print_state_of_fsc()
+
+
+
+                # testing termination of while loop
+                new_root_node.update_lower_bound()
+                new_root_node.update_upper_bound()
+                lower_bound_forward_search = new_root_node.specF['lower_bound']
+                self.specF['heuristic_search_error'] = new_root_node.specF['upper_bound']-new_root_node.specF['lower_bound']
+
+                MyFSC.plot(self.specF['name_to_save_folder']+'/looping_iteration_'+str(step_of_iteration),looping)
+                looping+=1
+
+                print("\n\n")
+                print("Root node id "+str(new_root_node.id))
+                print("Previous lower bound was ")
+                print(lower_bound_previous)
+                print("New lower bound is ")
+                print(lower_bound_forward_search)
+                #pdb.set_trace()
+                
+
+
+            print("\n\n EXIT LOOPING \n\n")
+            print("\n\nLower bound forward search being "+str(lower_bound_forward_search)+" compared to "+str(lower_bound_previous)+"\n\n")
+            #pdb.set_trace()
+
+            # (b) TEST TERMINATION
+            # The error bound is the difference between the upper and lower bounds on the value of the starting belief state
+            List_residual.append(self.specF['heuristic_search_error'])
+            if self.specF['heuristic_search_error'] < self.specF['residual_epsilon'] :
+                terminate = True
+                print("HEURISTIC SEARCH TERMINATED AT STEP "+str(step_of_iteration))
+                pdb.set_trace()
+                break # exit the while
+
+            print("\nBEFORE CLEANING")
+            MyFSC.print_state_of_fsc()
+            if not os.path.exists(self.specF['name_to_save_folder']+'/before_cleaning/'):
+                os.makedirs(self.specF['name_to_save_folder']+'/before_cleaning/')
+
+            # (c) Cleaning the reachable nodes, from the leaves to the root, old nodes are List_previousdelta_nodes_id, new added nodes are List_new_nodes_from_forward_search_id
+            MyFSC.plot(self.specF['name_to_save_folder']+'/before_cleaning',step_of_iteration)   
+            print('\nBEFORE CLEANING '+str(len(MyFSC.specF['list_of_nodes']))+' nodes ')
+            max_depth = MyFSC.compute_max_depth()
+            List_of_reachable_node_ids_for_cleaning = self.make_list_reachable_from_belief_state_subtree(List_new_nodes_from_forward_search_id,MyFSC)
+            if len(List_new_nodes_from_forward_search_id)!=len(List_of_reachable_node_ids_for_cleaning) :
+                print("REACHABLE NODES DIFFERENT")
+                pdb.set_trace()
+
+            #print("\nThe list of new nodes is")
+            #print(List_new_nodes_from_forward_search_id)
+            Recompute_policy_eval_matrix = []
+            while max_depth>=0 :
+                for reachable_node_id in List_of_reachable_node_ids_for_cleaning :  
+                    reachable_node = MyFSC.specF['list_of_nodes'][MyFSC.find_node_from_nodeid(reachable_node_id)]
+                    depth_for_this_node = reachable_node.specF['depth']
+                    if depth_for_this_node==max_depth :
+                        #print("reachable node id to clean is "+str(reachable_node_id))
+                        recompute_policy_eval_for_that_node = self.clean_fsc_from_new_nodes(MyFSC, List_nodes_previous_delta, reachable_node)
+                        Recompute_policy_eval_matrix.append(recompute_policy_eval_for_that_node)
+                max_depth-=1
+            print('AFTER CLEANING '+str(len(MyFSC.specF['list_of_nodes']))+' nodes ')
+            if self.specF['debug_mode'] :
+                    pdb.set_trace() 
+
+            Recompute_policy_eval_matrix = numpy.asarray(Recompute_policy_eval_matrix)
+            recompute_policy_eval = numpy.any(Recompute_policy_eval_matrix)
+
+            self.find_new_root_id(MyFSC)
+            self.recompute_belief_depth_proba_from_root(MyFSC)
+            
+            print("\nBEFORE PRUNING")
+            if not os.path.exists(self.specF['name_to_save_folder']+'/before_pruning/'):
+                os.makedirs(self.specF['name_to_save_folder']+'/before_pruning/')
+            MyFSC.plot(self.specF['name_to_save_folder']+'/before_pruning',step_of_iteration) 
+            MyFSC.print_state_of_fsc()
+            #(d) PRUNING 
+            List_of_reachable_node_ids = self.make_list_reachable_from_belief_state_all_FSC(MyFSC)
+
+            print(List_of_reachable_node_ids)
+            
+            for node in MyFSC.specF['list_of_nodes'] :
+                if node.id in List_of_reachable_node_ids :
+                    continue
+                else :
+                    print("\n ------------------------  PRUNING NODE ------------------------ "+str(node.id))
+                    MyFSC.remove_node(node)
+
+            MyFSC.update_value_of_states()
+            self.find_new_root_id(MyFSC)
+            self.recompute_belief_depth_proba_from_root(MyFSC)
+            MyFSC.plot(self.specF['name_to_save_folder'],step_of_iteration)   
+            step_of_iteration+=1
+            print('END OF ITERATION')  
+            print("\nBEFORE NEXT ITERATION")
+            MyFSC.print_state_of_fsc()
+
+        self.plot_bellman_residual(List_residual)
+        if not os.path.exists(self.specF['name_to_save_folder']+'/final/'):
+            os.makedirs(self.specF['name_to_save_folder']+'/final/')
+        MyFSC.plot(self.specF['name_to_save_folder']+'/final',step_of_iteration)   
+        return
+
+
+    def make_list_reachable_from_belief_state_subtree(self,liste_id_search_tree,FSC) :
+        if FSC.specF['root_node_id'] not in liste_id_search_tree : pdb.set_trace()
+        List_of_new_nodeid_optimizing_starting_belief_state = [FSC.specF['root_node_id']]
+        List_node_ongoing = [FSC.specF['root_node_id']]
+        index_list = 0
+        while index_list<len(List_node_ongoing) :
+            node = List_node_ongoing[index_list]
+            successors = FSC.specF['list_of_nodes'][FSC.find_node_from_nodeid(node)].specF['successors']
+            for successor_temp in successors :
+                if successor_temp in liste_id_search_tree :
+                    if successor_temp not in List_of_new_nodeid_optimizing_starting_belief_state :
+                        List_of_new_nodeid_optimizing_starting_belief_state.append(successor_temp)
+                        if successor_temp not in List_node_ongoing :
+                            List_node_ongoing.append(successor_temp)
+            index_list+=1
+        return List_of_new_nodeid_optimizing_starting_belief_state
+
+    def make_list_reachable_from_belief_state_all_FSC(self,FSC) :
+        List_of_new_nodeid_optimizing_starting_belief_state = [FSC.specF['root_node_id']]
+        List_node_ongoing = [FSC.specF['root_node_id']]
+        index_list = 0
+        while index_list<len(List_node_ongoing) :
+            node = List_node_ongoing[index_list]
+            successors = FSC.specF['list_of_nodes'][FSC.find_node_from_nodeid(node)].specF['successors']
+            for successor_temp in successors :
+                if successor_temp not in List_of_new_nodeid_optimizing_starting_belief_state :
+                    List_of_new_nodeid_optimizing_starting_belief_state.append(successor_temp)
+                    if successor_temp not in List_node_ongoing :
+                        List_node_ongoing.append(successor_temp)
+            index_list+=1
+        return List_of_new_nodeid_optimizing_starting_belief_state
 
